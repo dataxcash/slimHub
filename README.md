@@ -254,18 +254,13 @@ slimSync 订阅 "slim/hub/backpressure/**"
   → 收到 NORMAL: 恢复正常发送
 ```
 
-```protobuf
-message BackpressureFrame {
-    string hub_id = 1;
-    uint32 disk_usage_pct = 2;
-    BackpressureLevel level = 3;    // NORMAL / WARNING / CRITICAL
-    uint64 suggested_interval_ms = 4;
-}
-
-enum BackpressureLevel {
-    NORMAL = 0;
-    WARNING = 1;
-    CRITICAL = 2;
+```rust
+// 实际定义见 slim-common/src/types.rs
+struct BackpressureFrame {
+    hub_id: String,
+    disk_usage_pct: u32,
+    level: BackpressureLevel,   // Normal / Warning / Critical
+    suggested_interval_ms: u64,
 }
 ```
 
