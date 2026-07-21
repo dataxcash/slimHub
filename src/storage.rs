@@ -97,7 +97,7 @@ impl Storage {
 
     /// 消费确认：从 pending 移除，写入 acknowledged
     pub fn confirm_consumed(&self, key: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(value) = self.pending.remove(key)? {
+        if let Some(_value) = self.pending.remove(key)? {
             let blind_id = &key[key.len() - 16..];
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::signal;
 
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -34,13 +35,50 @@ async fn main() {
         let session = session.clone();
         let sub_topic = format!("{}/**", slim_common::topics::CHUNK_PREFIX);
         tokio::spawn(async move {
-            // TODO Phase 2: 替换为真实的 zenoh::pubsub::Subscriber
-            //   let sub = session.declare_subscriber(&sub_topic).res().await.unwrap();
-            tracing::info!("subscribed (stub): {}", sub_topic);
-            // 当前 stub，等待信号退出
-            let _ = store;
-            let _ = session;
-            let _ = sub_topic;
+            match session.declare_subscriber(&sub_topic).await {
+                Ok(subscriber) => {
+                    tracing::info!("subscribed: {}", sub_topic);
+                    while let Ok(sample) = subscriber.recv_async().await {
+                        let key_expr = sample.key_expr().to_string();
+                        let blind_id_hex = match key_expr.rsplit('/').next() {
+                            Some(seg) => seg,
+                            None => {
+                                tracing::warn!("unexpected key_expr: {}", key_expr);
+                                continue;
+                            }
+                        };
+                        let blind_id = match hex::decode(blind_id_hex) {
+                            Ok(bytes) if bytes.len() == 16 => {
+                                let mut arr = [0u8; 16];
+                                arr.copy_from_slice(&bytes);
+                                arr
+                            }
+                            _ => {
+                                tracing::warn!("invalid blind_id in key: {}", key_expr);
+                                continue;
+                            }
+                        };
+                        let payload: Vec<u8> = sample.payload().to_bytes().into();
+                        match store.insert_pending(&blind_id, &payload) {
+                            Ok((_is_new, _key)) => {
+                                if _is_new {
+                                    tracing::debug!("inserted pending: {}", blind_id_hex);
+                                }
+                                let ack_topic = format!("{}/{}", slim_common::topics::ACK_PREFIX, blind_id_hex);
+                                if let Err(e) = session.put(&ack_topic, "OK").await {
+                                    tracing::error!("ack send failed: {:?}", e);
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!("insert_pending error: {:?}", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("failed to declare subscriber: {:?}", e);
+                }
+            }
         });
     }
 
