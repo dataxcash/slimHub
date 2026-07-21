@@ -1,0 +1,12 @@
+[general]
+hub_id = "slimhub-1"
+log_level = "info"
+
+[storage]
+db_path = "/var/lib/slimhub/slimhub.db"
+disk_capacity_gb = 10
+high_watermark_pct = 80
+low_watermark_pct = 60
+
+[zenoh]
+listen = ["tcp/0.0.0.0:7447"]
