@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 #[derive(Debug, Clone)]
 pub struct Config {
     pub db_path: String,
