@@ -9,9 +9,10 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let path = std::env::var("SLIMHUB_CONFIG")
-            .unwrap_or_else(|_| "slimhub.toml".into());
+    pub fn load(config_path: Option<String>) -> Result<Self, Box<dyn std::error::Error>> {
+        let path = config_path
+            .or_else(|| std::env::var("SLIMHUB_CONFIG").ok())
+            .unwrap_or_else(|| "slimhub.toml".into());
         let content = std::fs::read_to_string(&path)?;
         let raw: toml::Value = toml::from_str(&content)?;
 

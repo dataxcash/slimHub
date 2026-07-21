@@ -3,14 +3,22 @@ mod storage;
 
 use std::sync::Arc;
 use std::time::Duration;
+use clap::Parser;
 use tokio::signal;
 
+#[derive(Parser)]
+#[command(name = "slimhub", version)]
+struct Cli {
+    #[arg(short, long)]
+    config: Option<String>,
+}
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    let cli = Cli::parse();
 
-    let cfg = config::Config::load().expect("failed to load config");
+    let cfg = config::Config::load(cli.config).expect("failed to load config");
     let hub_id = cfg.hub_id.clone();
 
     // 1. 打开 sled
@@ -29,7 +37,7 @@ async fn main() {
         }
     };
 
-    // 3. 订阅 Chunk：插入 pending → fsync → ACK（幂等：已存在则跳过 IO 重发 ACK）
+    // 3. 订阅 Chunk
     {
         let store = store.clone();
         let session = session.clone();
@@ -42,10 +50,7 @@ async fn main() {
                         let key_expr = sample.key_expr().to_string();
                         let blind_id_hex = match key_expr.rsplit('/').next() {
                             Some(seg) => seg,
-                            None => {
-                                tracing::warn!("unexpected key_expr: {}", key_expr);
-                                continue;
-                            }
+                            None => { continue; }
                         };
                         let blind_id = match hex::decode(blind_id_hex) {
                             Ok(bytes) if bytes.len() == 16 => {
@@ -53,10 +58,7 @@ async fn main() {
                                 arr.copy_from_slice(&bytes);
                                 arr
                             }
-                            _ => {
-                                tracing::warn!("invalid blind_id in key: {}", key_expr);
-                                continue;
-                            }
+                            _ => { continue; }
                         };
                         let payload: Vec<u8> = sample.payload().to_bytes().into();
                         match store.insert_pending(&blind_id, &payload) {
@@ -82,7 +84,7 @@ async fn main() {
         });
     }
 
-    // 4. 水位监控：每 30 秒检查，需要背压时广播
+    // 4. 水位监控
     {
         let store = store.clone();
         let session = session.clone();
@@ -95,7 +97,6 @@ async fn main() {
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 match store.trim_to_watermark(disk_cap, high, low) {
                     Ok(true) => {
-                        // Tier 3 触发：广播背压信号
                         let topic = format!("{}/{}", slim_common::topics::BACKPRESSURE_PREFIX, hub_id);
                         let frame = serde_json::json!({
                             "hub_id": hub_id,
@@ -114,7 +115,7 @@ async fn main() {
         });
     }
 
-    // 5. 响应 slimRagSvr 拉取消费
+    // 5. slimRagSvr 拉取响应
     {
         let store = store.clone();
         let session = session.clone();
