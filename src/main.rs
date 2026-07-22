@@ -1,9 +1,9 @@
 mod config;
 mod storage;
 
+use clap::Parser;
 use std::sync::Arc;
 use std::time::Duration;
-use clap::Parser;
 use tokio::signal;
 
 #[derive(Parser)]
@@ -22,10 +22,7 @@ async fn main() {
     let hub_id = cfg.hub_id.clone();
 
     // 1. 打开 sled
-    let store = Arc::new(
-        storage::Storage::open(&cfg.db_path)
-            .expect("failed to open storage")
-    );
+    let store = Arc::new(storage::Storage::open(&cfg.db_path).expect("failed to open storage"));
     tracing::info!("storage ready, pending items: {}", store.pending_len());
 
     // 2. 建立 Zenoh 会话
@@ -50,7 +47,9 @@ async fn main() {
                         let key_expr = sample.key_expr().to_string();
                         let blind_id_hex = match key_expr.rsplit('/').next() {
                             Some(seg) => seg,
-                            None => { continue; }
+                            None => {
+                                continue;
+                            }
                         };
                         let blind_id = match hex::decode(blind_id_hex) {
                             Ok(bytes) if bytes.len() == 16 => {
@@ -58,7 +57,9 @@ async fn main() {
                                 arr.copy_from_slice(&bytes);
                                 arr
                             }
-                            _ => { continue; }
+                            _ => {
+                                continue;
+                            }
                         };
                         let payload: Vec<u8> = sample.payload().to_bytes().into();
                         match store.insert_pending(&blind_id, &payload) {
@@ -66,7 +67,8 @@ async fn main() {
                                 if _is_new {
                                     tracing::debug!("inserted pending: {}", blind_id_hex);
                                 }
-                                let ack_topic = format!("{}/{}", slim_common::topics::ACK_PREFIX, blind_id_hex);
+                                let ack_topic =
+                                    format!("{}/{}", slim_common::topics::ACK_PREFIX, blind_id_hex);
                                 if let Err(e) = session.put(&ack_topic, "OK").await {
                                     tracing::error!("ack send failed: {:?}", e);
                                 }
@@ -97,7 +99,8 @@ async fn main() {
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 match store.trim_to_watermark(disk_cap, high, low) {
                     Ok(true) => {
-                        let topic = format!("{}/{}", slim_common::topics::BACKPRESSURE_PREFIX, hub_id);
+                        let topic =
+                            format!("{}/{}", slim_common::topics::BACKPRESSURE_PREFIX, hub_id);
                         let frame = serde_json::json!({
                             "hub_id": hub_id,
                             "level": "CRITICAL",

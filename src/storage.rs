@@ -1,5 +1,5 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use sled::Db;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 7 天 TTL（纳秒）
 const TTL_7_DAYS_NS: u128 = 7 * 24 * 60 * 60 * 1_000_000_000;
@@ -30,9 +30,16 @@ impl Storage {
         let acknowledged = db.open_tree("acknowledged")?;
         tracing::info!(
             "sled opened: {}, pending={}, acked={}",
-            path, pending.len(), acknowledged.len(),
+            path,
+            pending.len(),
+            acknowledged.len(),
         );
-        Ok(Storage { db, db_path: path.to_string(), pending, acknowledged })
+        Ok(Storage {
+            db,
+            db_path: path.to_string(),
+            pending,
+            acknowledged,
+        })
     }
 
     /// 写入 pending（幂等：已存在则跳过 IO，仅重发 ACK）
@@ -96,7 +103,10 @@ impl Storage {
     }
 
     /// 消费确认：从 pending 移除，写入 acknowledged
-    pub fn confirm_consumed(&self, key: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn confirm_consumed(
+        &self,
+        key: &[u8],
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(_value) = self.pending.remove(key)? {
             let blind_id = &key[key.len() - 16..];
             let now = SystemTime::now()
@@ -161,10 +171,14 @@ impl Storage {
             .unwrap_or_default()
             .as_nanos();
         let mut removed = 0u64;
-        let keys_to_remove: Vec<Vec<u8>> = self.pending.iter()
+        let keys_to_remove: Vec<Vec<u8>> = self
+            .pending
+            .iter()
             .filter_map(|r| r.ok())
             .filter(|(key, _)| {
-                if key.len() < 8 { return false; }
+                if key.len() < 8 {
+                    return false;
+                }
                 let mut ts_bytes = [0u8; 8];
                 ts_bytes.copy_from_slice(&key[..8]);
                 let timestamp = u64::from_be_bytes(ts_bytes) as u128;
@@ -185,9 +199,7 @@ impl Storage {
         }
 
         // Tier 3: 清理后仍高于高水位 → 要求背压，绝不丢数据
-        tracing::error!(
-            "tier3: still above high watermark after cleanup, BACKPRESSURE NEEDED"
-        );
+        tracing::error!("tier3: still above high watermark after cleanup, BACKPRESSURE NEEDED");
         Ok(true) // caller 应广播背压信号
     }
 }
