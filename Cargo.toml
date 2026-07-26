@@ -21,3 +21,4 @@ chrono = "0.4"
 serde_json = "1"
 
 clap = { version = "4", features = ["derive"] }
+daemonize = "0.5"
