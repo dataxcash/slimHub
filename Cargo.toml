@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-slim-common = { path = "../slim-common" }
+slim-common = { git = "https://github.com/dataxcash/slim-common.git" }
 
 tokio = { version = "1", features = ["full", "signal"] }
 serde = { version = "1", features = ["derive"] }
