@@ -2,6 +2,7 @@
 name = "slimhub"
 version = "0.1.0"
 edition = "2021"
+description = "Zero-knowledge encrypted ring buffer: blind storage and relay of ciphertext chunks between slimSync and slimRagSvr (sled, Blind-ID+timestamp only)"
 
 [dependencies]
 slim-common = { git = "https://github.com/dataxcash/slim-common.git" }
